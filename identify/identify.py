@@ -95,7 +95,7 @@ def tags_from_filename(path: str) -> set[str]:
             ret.update(extensions.NAMES[part])
             break
 
-    if len(ext) > 0:
+    if ext:
         ext = ext[1:].lower()
         if ext in extensions.EXTENSIONS:
             ret.update(extensions.EXTENSIONS[ext])
@@ -220,6 +220,13 @@ def parse_shebang_from_file(path: str) -> tuple[str, ...]:
 
 
 COPYRIGHT_RE = re.compile(r'^\s*(Copyright|\(C\)) .*$', re.I | re.MULTILINE)
+SPDX_CUSTOM_LICENSE_PREFIX = 'LicenseRef-'
+SPDX_LICENSE_ID_PREFIX = 'SPDX-License-Identifier:'
+SPDX_LICENSE_ID_RE = re.compile(rf'{SPDX_LICENSE_ID_PREFIX}\s+(.+)')
+# NB: the following intentionally ignores the `WITH` licensing clause
+# separator.
+SPDX_LICENSE_SEPARATORS = ['OR', 'AND']
+SPDX_LICENSE_SEPARATORS_RE = re.compile(r'\s+(OR|AND)\s+')
 WS_RE = re.compile(r'\s+')
 
 
@@ -229,7 +236,16 @@ def _norm_license(s: str) -> str:
     return s.strip()
 
 
-def license_id(path: str) -> set[str]:
+def _parse_spdx_matches(spdx_matches: list[str]) -> set[str]:
+    return {
+        token.replace(SPDX_CUSTOM_LICENSE_PREFIX, '', 1)
+        for spdx_match in spdx_matches
+        for token in SPDX_LICENSE_SEPARATORS_RE.split(spdx_match)
+        if token not in SPDX_LICENSE_SEPARATORS
+    }
+
+
+def license_ids(path: str) -> set[str]:
     """Return the SPDX IDs for the license(s) contained in `path`.  If no
     licenses are detected, return an empty set.
 
@@ -238,10 +254,13 @@ def license_id(path: str) -> set[str]:
 
     Approximate algorithm:
 
-    1. strip copyright line
-    2. normalize whitespace (replace all whitespace with a single space)
-    3. check exact text match with existing licenses
-    4. failing that use edit distance
+    1. scan for SPDX licenses. If any are found, parse them and return
+       immediately.
+    2. Else, do a more in-depth license scan like so:
+        a. strip copyright line
+        b. normalize whitespace (replace all whitespace with a single space)
+        c. check exact text match with existing licenses
+        d. failing that use edit distance
     """
     import ukkonen  # `pip install identify[license]`
 
@@ -251,6 +270,10 @@ def license_id(path: str) -> set[str]:
     except OSError:
         raise ValueError(f'{path} does not exist.')
 
+    spdx_matches = SPDX_LICENSE_ID_RE.findall(contents)
+    if spdx_matches:
+        return _parse_spdx_matches(spdx_matches)
+
     norm = _norm_license(contents)
 
     min_edit_dist = sys.maxsize
@@ -258,11 +281,13 @@ def license_id(path: str) -> set[str]:
 
     cutoff = math.ceil(.05 * len(norm))
 
+    spdx_license_ids = set()
+
     # try exact matches
     for spdx, text in licenses.LICENSES:
         norm_license = _norm_license(text)
         if norm == norm_license:
-            return {spdx}
+            spdx_license_ids |= {spdx}
 
         # skip the slow calculation if the lengths are very different
         if norm and abs(len(norm) - len(norm_license)) / len(norm) > .05:
@@ -275,7 +300,5 @@ def license_id(path: str) -> set[str]:
 
     # if there's less than 5% edited from the license, we found our match
     if norm and min_edit_dist < cutoff:
-        return {min_edit_dist_spdx}
-    else:
-        # no matches :'(
-        return set()
+        spdx_license_ids |= {min_edit_dist_spdx}
+    return spdx_license_ids

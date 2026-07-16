@@ -4,6 +4,7 @@ import builtins
 import errno
 import io
 import os
+import shutil
 import socket
 import stat
 from tempfile import TemporaryDirectory
@@ -12,6 +13,8 @@ from unittest import mock
 import pytest
 
 from identify import identify
+from identify.identify import SPDX_CUSTOM_LICENSE_PREFIX
+from identify.identify import SPDX_LICENSE_ID_PREFIX
 
 
 def test_all_tags_includes_basic_ones():
@@ -376,7 +379,7 @@ def make_executable(filename):
 
 
 def test_license_identification():
-    assert identify.license_id('LICENSE') == {'MIT'}
+    assert identify.license_ids('LICENSE') == {'MIT'}
 
 
 def test_license_exact_identification(tmpdir):
@@ -397,8 +400,73 @@ DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
 '''
     f = tmpdir.join('LICENSE')
     f.write(wtfpl)
-    assert identify.license_id(f.strpath) == {'WTFPL'}
+    assert identify.license_ids(f.strpath) == {'WTFPL'}
 
 
 def test_license_not_identified():
-    assert identify.license_id(os.devnull) == set()
+    assert identify.license_ids(os.devnull) == set()
+
+
+@pytest.fixture
+def tmp_license(tmpdir):
+    tmp_lic = tmpdir / 'lic.txt'
+    yield tmp_lic
+    shutil.rmtree(tmpdir)
+
+
+@pytest.mark.parametrize(
+    'input_s,expected_output',
+    [
+        (
+            f'{SPDX_LICENSE_ID_PREFIX} MyBogusLicense',
+            {'MyBogusLicense'},
+        ),
+        (
+            f'{SPDX_LICENSE_ID_PREFIX} Lic1\n{SPDX_LICENSE_ID_PREFIX}\tLic2',
+            {'Lic1', 'Lic2'},
+        ),
+        (
+            f'{SPDX_LICENSE_ID_PREFIX} Lic1 AND Lic2',
+            {'Lic1', 'Lic2'},
+        ),
+        (
+            f'{SPDX_LICENSE_ID_PREFIX} Lic1 AND Lic2\n{SPDX_LICENSE_ID_PREFIX} Lic3',  # noqa: E501
+            {'Lic1', 'Lic2', 'Lic3'},
+        ),
+        (
+            f'{SPDX_LICENSE_ID_PREFIX} Lic1 OR Lic2\n{SPDX_LICENSE_ID_PREFIX} Lic3',  # noqa: E501
+            {'Lic1', 'Lic2', 'Lic3'},
+        ),
+        (
+            f'Lic1 OR Lic2{SPDX_LICENSE_ID_PREFIX}',
+            set(),
+        ),
+        (
+            SPDX_LICENSE_ID_PREFIX,
+            set(),
+        ),
+        (
+            f'{SPDX_LICENSE_ID_PREFIX} AND',
+            set(),
+        ),
+        (
+            f'{SPDX_LICENSE_ID_PREFIX} OR',
+            set(),
+        ),
+        (
+            f'{SPDX_LICENSE_ID_PREFIX} A OR',
+            {'A OR'},
+        ),
+        (
+            f'{SPDX_LICENSE_ID_PREFIX} AND B',
+            {'AND B'},
+        ),
+        (
+            f'{SPDX_LICENSE_ID_PREFIX} AND {SPDX_CUSTOM_LICENSE_PREFIX}B',
+            {'AND B'},
+        ),
+    ],
+)
+def test_license_spdx(tmp_license, input_s, expected_output):
+    tmp_license.write_text(input_s, encoding='UTF-8')
+    assert identify.license_ids(str(tmp_license)) == expected_output
