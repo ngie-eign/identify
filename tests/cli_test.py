@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from identify import cli
 
 
@@ -26,6 +28,25 @@ def test_identify_cli_filename_only_unidentified(capsys):
 
 def test_file_not_found(capsys):
     ret = cli.main(('x.unknown',))
+    out, _ = capsys.readouterr()
+    assert ret == 1
+    assert out == 'x.unknown does not exist.\n'
+
+
+@pytest.fixture
+def requires_licensing_support():
+    _ = pytest.importorskip('ukkonen')
+
+
+def test_copyright_has_copyright(capsys, requires_licensing_support):
+    ret = cli.main(('LICENSE', '--tag-type=license'))
+    out, _ = capsys.readouterr()
+    assert ret == 0
+    assert out == '["MIT"]\n'
+
+
+def test_copyright_full_copyright(capsys, requires_licensing_support):
+    ret = cli.main(('x.unknown', '--tag-type=license'))
     out, _ = capsys.readouterr()
     assert ret == 1
     assert out == 'x.unknown does not exist.\n'
