@@ -222,7 +222,7 @@ def parse_shebang_from_file(path: str) -> tuple[str, ...]:
 COPYRIGHT_RE = re.compile(r'^\s*(Copyright|\(C\)) .*$', re.I | re.MULTILINE)
 SPDX_CUSTOM_LICENSE_PREFIX = 'LicenseRef-'
 SPDX_LICENSE_ID_PREFIX = 'SPDX-License-Identifier:'
-SPDX_LICENSE_ID_RE = re.compile(rf'{SPDX_LICENSE_ID_PREFIX}\s+(.+)')
+SPDX_LICENSE_ID_RE = re.compile(rf'{SPDX_LICENSE_ID_PREFIX}\s+([\w\.\- \t]+)')
 # NB: the following intentionally ignores the `WITH` licensing clause
 # separator.
 SPDX_LICENSE_SEPARATORS = ['OR', 'AND']
@@ -238,7 +238,7 @@ def _norm_license(s: str) -> str:
 
 def _parse_spdx_matches(spdx_matches: list[str]) -> set[str]:
     return {
-        token.replace(SPDX_CUSTOM_LICENSE_PREFIX, '', 1)
+        token.replace(SPDX_CUSTOM_LICENSE_PREFIX, '', 1).strip()
         for spdx_match in spdx_matches
         for token in SPDX_LICENSE_SEPARATORS_RE.split(spdx_match)
         if token not in SPDX_LICENSE_SEPARATORS

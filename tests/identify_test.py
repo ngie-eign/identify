@@ -465,6 +465,10 @@ def tmp_license(tmpdir):
             f'{SPDX_LICENSE_ID_PREFIX} AND {SPDX_CUSTOM_LICENSE_PREFIX}B',
             {'AND B'},
         ),
+        (
+            f'/** {SPDX_LICENSE_ID_PREFIX} ISC **/',
+            {'ISC'},
+        ),
     ],
 )
 def test_license_spdx(tmp_license, input_s, expected_output):
