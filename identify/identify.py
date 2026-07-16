@@ -229,11 +229,11 @@ def _norm_license(s: str) -> str:
     return s.strip()
 
 
-def license_id(filename: str) -> str | None:
-    """Return the spdx id for the license contained in `filename`.  If no
-    license is detected, returns `None`.
+def license_id(path: str) -> set[str]:
+    """Return the SPDX IDs for the license(s) contained in `path`.  If no
+    licenses are detected, return an empty set.
 
-    spdx: https://spdx.org/licenses/
+    SPDX: https://spdx.org/licenses/
     licenses from choosealicense.com: https://github.com/choosealicense.com
 
     Approximate algorithm:
@@ -245,8 +245,11 @@ def license_id(filename: str) -> str | None:
     """
     import ukkonen  # `pip install identify[license]`
 
-    with open(filename, encoding='UTF-8') as f:
-        contents = f.read()
+    try:
+        with open(path, encoding='UTF-8') as f:
+            contents = f.read()
+    except OSError:
+        raise ValueError(f'{path} does not exist.')
 
     norm = _norm_license(contents)
 
@@ -259,7 +262,7 @@ def license_id(filename: str) -> str | None:
     for spdx, text in licenses.LICENSES:
         norm_license = _norm_license(text)
         if norm == norm_license:
-            return spdx
+            return {spdx}
 
         # skip the slow calculation if the lengths are very different
         if norm and abs(len(norm) - len(norm_license)) / len(norm) > .05:
@@ -272,7 +275,7 @@ def license_id(filename: str) -> str | None:
 
     # if there's less than 5% edited from the license, we found our match
     if norm and min_edit_dist < cutoff:
-        return min_edit_dist_spdx
+        return {min_edit_dist_spdx}
     else:
         # no matches :'(
-        return None
+        return set()

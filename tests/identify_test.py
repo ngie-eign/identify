@@ -376,7 +376,7 @@ def make_executable(filename):
 
 
 def test_license_identification():
-    assert identify.license_id('LICENSE') == 'MIT'
+    assert identify.license_id('LICENSE') == {'MIT'}
 
 
 def test_license_exact_identification(tmpdir):
@@ -397,8 +397,8 @@ DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
 '''
     f = tmpdir.join('LICENSE')
     f.write(wtfpl)
-    assert identify.license_id(f.strpath) == 'WTFPL'
+    assert identify.license_id(f.strpath) == {'WTFPL'}
 
 
 def test_license_not_identified():
-    assert identify.license_id(os.devnull) is None
+    assert identify.license_id(os.devnull) == set()
